@@ -1,0 +1,428 @@
+import React, { useState } from 'react';
+import { 
+  User, Activity, AlertCircle, CheckCircle2, 
+  Mic, Pause, Play, Send, Sparkles, 
+  FileText, ClipboardList, Stethoscope, Beaker, 
+  ChevronRight, Info, Search, Database, 
+  Clock, Heart, ShieldAlert, Zap, Brain,
+  ArrowRight, Share2, Download, X, LayoutGrid, Filter
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { AIFourQuadrantView } from './AIFourQuadrantView';
+
+interface AIDiagnosisViewProps {
+  setCurrentPage: (page: any) => void;
+  isDarkMode: boolean;
+  setIsDarkMode: (value: boolean) => void;
+}
+
+export function AIDiagnosisView({ setCurrentPage, isDarkMode, setIsDarkMode }: AIDiagnosisViewProps) {
+  const [activeStep, setActiveStep] = useState(1);
+  const [activeTab, setActiveTab] = useState('主诉');
+  const [isRecording, setIsRecording] = useState(true);
+  const [isFourQuadrantModalOpen, setIsFourQuadrantModalOpen] = useState(false);
+
+  const steps = [
+    { id: 1, label: '信息采集' },
+    { id: 2, label: 'AI诊断' },
+    { id: 3, label: '诊断确认' },
+    { id: 4, label: '方案流转' },
+  ];
+
+  const tabs = ['主诉', '现病史', '既往史', '体格检查', '辅助检查'];
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between shrink-0 mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white transition-colors duration-300">AI辅助诊疗</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 transition-colors duration-300">智能病历生成与多维诊断分析</p>
+        </div>
+        <div className="flex items-center space-x-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 transition-colors duration-300" />
+            <input 
+              type="text" 
+              placeholder="搜索患者姓名/ID..." 
+              className="pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl text-sm focus:ring-2 focus:ring-brand outline-none w-64 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors duration-300 shadow-sm"
+            />
+          </div>
+          <button className="p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm">
+            <Filter className="w-4 h-4 text-slate-600 dark:text-slate-300" />
+          </button>
+        </div>
+      </div>
+
+      {/* Stepper / Sub-header */}
+      <div className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl rounded-3xl border border-white/80 dark:border-slate-800/60 px-8 py-4 flex items-center justify-center shrink-0 shadow-sm transition-colors duration-300">
+        <div className="flex items-center space-x-12">
+          {steps.map((step) => (
+            <div key={step.id} className="flex items-center space-x-3">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                activeStep === step.id 
+                  ? 'bg-brand text-white shadow-lg shadow-brand/30 ring-4 ring-brand/10' 
+                  : activeStep > step.id 
+                    ? 'bg-brand/10 text-brand' 
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500'
+              }`}>
+                {activeStep > step.id ? <CheckCircle2 className="w-5 h-5" /> : step.id}
+              </div>
+              <span className={`text-sm font-medium transition-colors duration-300 ${
+                activeStep === step.id ? 'text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'
+              }`}>{step.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 flex overflow-hidden p-6 gap-6">
+        {/* Left Sidebar: Patient Info */}
+        <aside className="w-80 flex flex-col gap-6 overflow-y-auto custom-scrollbar shrink-0">
+          {/* Patient Card */}
+          <div className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl rounded-3xl p-6 shadow-sm border border-white/80 dark:border-slate-800/60 transition-colors duration-300">
+            <div className="flex items-start justify-between mb-6">
+              <div className="flex items-center space-x-4">
+                <div className="w-14 h-14 rounded-2xl bg-brand-light/30 flex items-center justify-center text-brand">
+                  <User className="w-8 h-8" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white transition-colors duration-300">张美玲</h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 transition-colors duration-300">女 · 45岁 · 初诊</p>
+                </div>
+              </div>
+              <button className="p-2 text-slate-400 dark:text-slate-500 hover:text-brand dark:hover:text-brand transition-colors">
+                <Info className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400 dark:text-slate-500 transition-colors duration-300">病历号</span>
+                <span className="font-mono font-medium text-slate-900 dark:text-white transition-colors duration-300">MR-2026-04521</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400 dark:text-slate-500 transition-colors duration-300">预约科目</span>
+                <span className="font-medium text-slate-900 dark:text-white transition-colors duration-300">内分泌科</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400 dark:text-slate-500 transition-colors duration-300">就诊时间</span>
+                <span className="font-medium text-slate-900 dark:text-white transition-colors duration-300">2026-03-20 09:30</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400 dark:text-slate-500 transition-colors duration-300">家族史</span>
+                <span className="font-medium text-slate-900 dark:text-white transition-colors duration-300">父: 2型糖尿病</span>
+              </div>
+            </div>
+          </div>
+
+          {/* AI Four Quadrant Assessment Entry Point */}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setIsFourQuadrantModalOpen(true)}
+            className="bg-gradient-to-br from-brand to-brand-hover rounded-3xl p-6 text-white shadow-lg shadow-brand/20 flex items-center justify-between group"
+          >
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center">
+                <LayoutGrid className="w-6 h-6" />
+              </div>
+              <div className="text-left">
+                <h3 className="font-bold">AI四象限健康评估</h3>
+                <p className="text-xs text-white/70">多维风险评估与干预建议</p>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-white/50 group-hover:translate-x-1 transition-transform" />
+          </motion.button>
+
+          {/* Allergy Alert */}
+          <div className="bg-red-50/80 dark:bg-red-900/20 backdrop-blur-xl rounded-3xl p-6 border border-red-100 dark:border-red-900/30 shadow-sm transition-colors duration-300">
+            <div className="flex items-center space-x-2 text-red-600 dark:text-red-400 mb-3 transition-colors duration-300">
+              <ShieldAlert className="w-5 h-5" />
+              <h3 className="font-bold">过敏史警示</h3>
+            </div>
+            <p className="text-sm text-red-700 dark:text-red-300 font-medium leading-relaxed transition-colors duration-300">
+              青霉素类 — 严重过敏（皮疹+呼吸困难）
+            </p>
+          </div>
+
+          {/* Data Sources */}
+          <div className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl rounded-3xl p-6 shadow-sm border border-white/80 dark:border-slate-800/60 transition-colors duration-300">
+            <div className="flex items-center space-x-2 mb-6">
+              <Database className="w-5 h-5 text-slate-400 dark:text-slate-500 transition-colors duration-300" />
+              <h3 className="font-bold text-slate-900 dark:text-white transition-colors duration-300">数据源接入状态</h3>
+            </div>
+            <div className="space-y-5">
+              {[
+                { label: 'HIS 患者信息', status: '已同步', color: 'text-green-500' },
+                { label: 'LIS 检验报告', status: '3份报告', color: 'text-green-500' },
+                { label: 'PACS 影像', status: '加载中...', color: 'text-brand' },
+                { label: '体检系统', status: '2次体检', color: 'text-green-500' },
+              ].map((source, i) => (
+                <div key={i} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-2 h-2 rounded-full ${source.color.replace('text', 'bg')}`}></div>
+                    <span className="text-slate-600 dark:text-slate-400 transition-colors duration-300">{source.label}</span>
+                  </div>
+                  <span className={`font-medium ${source.color}`}>{source.status}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Content Area */}
+        <main className="flex-1 flex flex-col gap-6 overflow-hidden">
+          {/* Voice Consultation */}
+          <section className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl rounded-3xl p-8 shadow-sm border border-white/80 dark:border-slate-800/60 flex flex-col shrink-0 transition-colors duration-300">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center space-x-3">
+                <Mic className="w-6 h-6 text-brand" />
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white transition-colors duration-300">语音问诊采集</h3>
+              </div>
+              {isRecording && (
+                <div className="flex items-center space-x-2 px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-full text-xs font-bold animate-pulse transition-colors duration-300">
+                  <div className="w-2 h-2 rounded-full bg-red-600 dark:bg-red-500"></div>
+                  <span>录音中 00:42</span>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-8 mb-6 flex flex-col items-center justify-center min-h-[120px] relative overflow-hidden transition-colors duration-300">
+              {/* Waveform Visualization */}
+              <div className="flex items-center space-x-1 h-12">
+                {[...Array(24)].map((_, i) => (
+                  <motion.div
+                    key={i}
+                    animate={{ 
+                      height: isRecording ? [10, Math.random() * 40 + 10, 10] : 4 
+                    }}
+                    transition={{ 
+                      repeat: Infinity, 
+                      duration: 0.5 + Math.random() * 0.5,
+                      ease: "easeInOut"
+                    }}
+                    className="w-1 bg-brand rounded-full"
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2 text-slate-400 dark:text-slate-500 transition-colors duration-300">
+                <span className="text-xs font-bold uppercase tracking-wider">实时转写</span>
+              </div>
+              <p className="text-slate-700 dark:text-slate-300 leading-relaxed transition-colors duration-300">
+                患者张美玲，女性，45岁，主诉口渴多饮多尿3个月，伴体重下降约5公斤。近期感觉乏力明显，视物模糊。既往体健，否认高血压史。家族史：父亲有2型糖尿病病史...
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end space-x-4 mt-8">
+              <button 
+                onClick={() => setIsRecording(!isRecording)}
+                className="flex items-center space-x-2 px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+              >
+                {isRecording ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                <span>{isRecording ? '暂停' : '继续'}</span>
+              </button>
+              <button className="flex items-center space-x-2 px-8 py-3 bg-brand text-white rounded-2xl font-bold hover:bg-brand-hover transition-all shadow-lg shadow-brand/20">
+                <CheckCircle2 className="w-5 h-5" />
+                <span>完成采集</span>
+              </button>
+            </div>
+          </section>
+
+          {/* Structured Medical Record */}
+          <section className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl rounded-3xl p-8 shadow-sm border border-white/80 dark:border-slate-800/60 flex-1 flex flex-col overflow-hidden transition-colors duration-300">
+            <div className="flex items-center justify-between mb-8 shrink-0">
+              <div className="flex items-center space-x-3">
+                <FileText className="w-6 h-6 text-brand" />
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white transition-colors duration-300">AI结构化病历（实时生成中）</h3>
+              </div>
+              <button className="flex items-center space-x-2 px-4 py-2 bg-brand-light/20 text-brand rounded-xl text-sm font-bold hover:bg-brand-light/30 transition-all">
+                <Zap className="w-4 h-4" />
+                <span>AI生成</span>
+              </button>
+            </div>
+
+            <div className="flex items-center space-x-2 mb-8 border-b border-slate-100 dark:border-slate-800 shrink-0 transition-colors duration-300">
+              {tabs.map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-6 py-3 text-sm font-bold transition-all relative ${
+                    activeTab === tab ? 'text-brand' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+                  }`}
+                >
+                  {tab}
+                  {activeTab === tab && (
+                    <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-1 bg-brand rounded-full" />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-6 min-h-[100px] transition-colors duration-300">
+                <p className="text-slate-900 dark:text-white font-medium text-lg transition-colors duration-300">口渴多饮、多尿3个月，体重下降5kg</p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-6 mt-8 shrink-0">
+              <div className="flex items-center space-x-2 text-green-600 dark:text-green-500 transition-colors duration-300">
+                <CheckCircle2 className="w-4 h-4" />
+                <span className="text-sm font-bold">主诉完整</span>
+              </div>
+              <div className="flex items-center space-x-2 text-green-600 dark:text-green-500 transition-colors duration-300">
+                <CheckCircle2 className="w-4 h-4" />
+                <span className="text-sm font-bold">时间明确</span>
+              </div>
+              <div className="flex items-center space-x-2 text-orange-500 dark:text-orange-400 transition-colors duration-300">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-sm font-bold">建议补充：发病诱因</span>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        {/* Right Sidebar: AI Analysis */}
+        <aside className="w-96 flex flex-col gap-6 overflow-y-auto custom-scrollbar shrink-0">
+          {/* AI Preliminary Analysis */}
+          <div className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl rounded-3xl p-8 shadow-sm border border-white/80 dark:border-slate-800/60 transition-colors duration-300">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-3">
+                <Sparkles className="w-6 h-6 text-brand" />
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white transition-colors duration-300">AI预分析</h3>
+              </div>
+              <span className="px-2 py-1 bg-brand-light/20 text-brand rounded text-[10px] font-bold">分析中</span>
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-8 transition-colors duration-300">
+              基于WiNGPT医疗模型，AI正在实时分析语音转写内容，提取关键症状特征...
+            </p>
+
+            <div className="space-y-6">
+              <div className="text-sm font-bold text-slate-400 dark:text-slate-500 mb-3 transition-colors duration-300">已提取关键信息</div>
+              <div className="space-y-4">
+                {[
+                  { label: '症状', value: '口渴多饮 · 多尿 · 体重下降 · 乏力', color: 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' },
+                  { label: '时间', value: '3个月', color: 'bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400' },
+                  { label: '家族', value: '父亲: 2型糖尿病', color: 'bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400' },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-start space-x-4">
+                    <span className={`px-2 py-1 rounded text-xs font-bold shrink-0 transition-colors duration-300 ${item.color}`}>{item.label}</span>
+                    <span className="text-sm text-slate-700 dark:text-slate-300 font-medium transition-colors duration-300">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Data Completeness */}
+          <div className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl rounded-3xl p-8 shadow-sm border border-white/80 dark:border-slate-800/60 transition-colors duration-300">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white transition-colors duration-300">数据完整度</h3>
+              <span className="text-brand font-bold text-xl">68%</span>
+            </div>
+            
+            <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full mb-8 overflow-hidden transition-colors duration-300">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: '68%' }}
+                className="h-full bg-brand rounded-full"
+              />
+            </div>
+
+            <div className="space-y-4">
+              {[
+                { label: '主诉信息', status: '完整', color: 'text-green-500' },
+                { label: '现病史', status: '完整', color: 'text-green-500' },
+                { label: '体格检查', status: '待录入', color: 'text-slate-400 dark:text-slate-500' },
+                { label: '检验报告', status: '3份', color: 'text-green-500' },
+                { label: '影像报告', status: '加载中', color: 'text-brand' },
+              ].map((item, i) => (
+                <div key={i} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors duration-300 ${
+                      item.status === '完整' ? 'bg-green-500 border-green-500 text-white' : 'border-slate-200 dark:border-slate-700'
+                    }`}>
+                      {item.status === '完整' && <CheckCircle2 className="w-3 h-3" />}
+                    </div>
+                    <span className="text-slate-600 dark:text-slate-400 transition-colors duration-300">{item.label}</span>
+                  </div>
+                  <span className={`font-bold transition-colors duration-300 ${item.color}`}>{item.status}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* AI Initial Findings */}
+          <div className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl rounded-3xl p-8 shadow-sm border border-white/80 dark:border-slate-800/60 space-y-6 transition-colors duration-300">
+            <div className="flex items-center space-x-3">
+              <Zap className="w-6 h-6 text-brand" />
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white transition-colors duration-300">AI初步发现</h3>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-orange-50 dark:bg-orange-900/20 rounded-2xl p-4 border border-orange-100 dark:border-orange-900/30 transition-colors duration-300">
+                <div className="text-orange-600 dark:text-orange-400 font-bold text-sm mb-2 transition-colors duration-300">疑似代谢异常</div>
+                <p className="text-xs text-orange-700 dark:text-orange-300 leading-relaxed transition-colors duration-300">
+                  三多一少症状 + 家族史阳性，高度提示糖尿病可能
+                </p>
+              </div>
+
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-4 border border-blue-100 dark:border-blue-900/30 transition-colors duration-300">
+                <div className="text-blue-600 dark:text-blue-400 font-bold text-sm mb-2 transition-colors duration-300">建议优先检查</div>
+                <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed transition-colors duration-300">
+                  FPG · HbA1c · OGTT · 胰岛功能 · 糖尿病自身抗体
+                </p>
+              </div>
+
+              <div className="bg-red-50 dark:bg-red-900/20 rounded-2xl p-4 border border-red-100 dark:border-red-900/30 transition-colors duration-300">
+                <div className="text-red-600 dark:text-red-400 font-bold text-sm mb-2 transition-colors duration-300">用药注意</div>
+                <p className="text-xs text-red-700 dark:text-red-300 leading-relaxed transition-colors duration-300">
+                  患者青霉素过敏，需避免相关药物交叉反应
+                </p>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      {/* AI Four Quadrant Modal */}
+      <AnimatePresence>
+        {isFourQuadrantModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 bg-slate-900/60 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="w-full h-full max-w-[1720px] bg-[#F4F6F8] dark:bg-slate-900 rounded-[40px] shadow-2xl overflow-hidden flex flex-col relative border border-white/20 dark:border-slate-800/50"
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => setIsFourQuadrantModalOpen(false)}
+                className="absolute top-6 right-8 z-[110] p-3 bg-white dark:bg-slate-800 rounded-2xl shadow-lg hover:shadow-xl transition-all text-slate-500 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="flex-1 overflow-hidden">
+                <AIFourQuadrantView 
+                  setCurrentPage={() => setIsFourQuadrantModalOpen(false)} 
+                  isDarkMode={isDarkMode} 
+                  setIsDarkMode={setIsDarkMode} 
+                  hideHeader={true}
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
