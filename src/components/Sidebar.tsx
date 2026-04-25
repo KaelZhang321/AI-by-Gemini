@@ -1,8 +1,8 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Home, LayoutDashboard, Sparkles, Search, Bell, Settings, 
-  Sun, Moon, LogOut, Menu, ChevronRight, Activity 
+  Home, LayoutDashboard, Sparkles, Search, Bell, Settings,
+  Sun, Moon, LogOut, Menu, ChevronRight, Activity, FileHeart
 } from 'lucide-react';
 
 interface NavItemProps {
@@ -111,8 +111,8 @@ interface SidebarProps {
   setIsDarkMode: (val: boolean) => void;
   isCollapsed: boolean;
   setIsCollapsed: (val: boolean) => void;
-  currentPage: 'dashboard' | 'health-butler' | 'function-square' | 'ai-diagnosis' | 'medical-ai' | 'nurse-ai' | 'consultant-ai' | 'ai-component-management';
-  setCurrentPage: (page: 'dashboard' | 'health-butler' | 'function-square' | 'ai-diagnosis' | 'medical-ai' | 'nurse-ai' | 'consultant-ai' | 'ai-component-management') => void;
+  currentPage: 'dashboard' | 'health-butler' | 'function-square' | 'ai-diagnosis' | 'medical-ai' | 'nurse-ai' | 'consultant-ai' | 'ai-component-management' | 'health-report';
+  setCurrentPage: (page: 'dashboard' | 'health-butler' | 'function-square' | 'ai-diagnosis' | 'medical-ai' | 'nurse-ai' | 'consultant-ai' | 'ai-component-management' | 'health-report') => void;
   onLogout: () => void;
 }
 
@@ -337,6 +337,14 @@ export function Sidebar({ isDarkMode, setIsDarkMode, isCollapsed, setIsCollapsed
         </motion.div>
 
         <NavItem icon={Search} label="客户查询" isDark={isDarkMode} isCollapsed={isCollapsed} />
+        <NavItem
+          icon={FileHeart}
+          label="体检报告"
+          isDark={isDarkMode}
+          isCollapsed={isCollapsed}
+          active={currentPage === 'health-report'}
+          onClick={() => setCurrentPage('health-report')}
+        />
       </motion.nav>
 
       {/* 4. Bottom Sections (Notifications & Settings) */}

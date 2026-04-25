@@ -69,6 +69,8 @@ const placeNow = (el: HTMLElement, slot: Slot, skew: number) =>
 
 export interface CardSwapRef {
   swap: () => void;
+  swapBack: () => void;
+  getCurrentIndex: () => number;
 }
 
 const CardSwap = forwardRef<CardSwapRef, CardSwapProps>(({
@@ -112,10 +114,12 @@ const CardSwap = forwardRef<CardSwapRef, CardSwapProps>(({
   const container = useRef<HTMLDivElement>(null);
   const swapRef = useRef<() => void>();
 
+  const swapBackRef = useRef<() => void>();
+
   useImperativeHandle(ref, () => ({
-    swap: () => {
-      swapRef.current?.();
-    }
+    swap: () => { swapRef.current?.(); },
+    swapBack: () => { swapBackRef.current?.(); },
+    getCurrentIndex: () => order.current[0] ?? 0,
   }));
 
   useEffect(() => {
@@ -182,6 +186,39 @@ const CardSwap = forwardRef<CardSwapRef, CardSwapProps>(({
     };
 
     swapRef.current = swap;
+
+    const swapBack = () => {
+      if (order.current.length < 2) return;
+      if (tlRef.current && tlRef.current.isActive()) return;
+
+      const back = order.current[order.current.length - 1];
+      const rest = order.current.slice(0, -1);
+      const elBack = refs[back].current!;
+      const tl = gsap.timeline();
+      tlRef.current = tl;
+
+      // Move the back card off-screen below first
+      tl.set(elBack, { y: '+=500', zIndex: refs.length + 1 });
+
+      // Shift all others back by one slot
+      tl.addLabel('demote', 0);
+      rest.forEach((idx, i) => {
+        const el = refs[idx].current!;
+        const slot = makeSlot(i + 1, cardDistance, verticalDistance, refs.length);
+        tl.set(el, { zIndex: slot.zIndex }, 'demote');
+        tl.to(el, { x: slot.x, y: slot.y, z: slot.z, duration: config.durMove, ease: config.ease }, `demote+=${i * 0.15}`);
+      });
+
+      // Bring the back card to front (slot 0)
+      const frontSlot = makeSlot(0, cardDistance, verticalDistance, refs.length);
+      tl.addLabel('bringFront', `demote+=${config.durMove * config.returnDelay}`);
+      tl.call(() => { gsap.set(elBack, { zIndex: frontSlot.zIndex }); }, undefined, 'bringFront');
+      tl.to(elBack, { x: frontSlot.x, y: frontSlot.y, z: frontSlot.z, duration: config.durReturn, ease: config.ease }, 'bringFront');
+
+      tl.call(() => { order.current = [back, ...rest]; });
+    };
+
+    swapBackRef.current = swapBack;
 
     if (delay > 0) {
       swap();

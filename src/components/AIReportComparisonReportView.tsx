@@ -1,10 +1,25 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, Download, RefreshCw, Sun, Moon, User, Activity, Brain, Send, MessageSquare, Bot, Sparkles, Search, List, LayoutGrid, X } from 'lucide-react';
+import { ChevronLeft, ChevronDown, Download, RefreshCw, Sun, Moon, User, Activity, Brain, Send, MessageSquare, Bot, Sparkles, Search, List, LayoutGrid, X, FileText, Layers, TestTubes, ScanLine, Stethoscope, HeartPulse, ClipboardList, TrendingUp, ArrowLeft, Filter, Calendar, BarChart3 } from 'lucide-react';
 import CardSwap, { Card, CardSwapRef } from './CardSwap';
 import { GoogleGenAI, Type } from "@google/genai";
+import rawReportData from '../data/healthReportRaw';
+import { mapReportData } from './HealthReport/reportDataMapper';
+import { ReportOverview } from './HealthReport/ReportOverview';
+import { ReportDataTable } from './HealthReport/ReportDataTable';
+import { ReportImagingCards } from './HealthReport/ReportImagingCard';
+import { ReportTextSection } from './HealthReport/ReportTextSection';
+import { ReportTrendChart } from './HealthReport/ReportTrendChart';
+import { ImagingCompare } from './HealthReport/ImagingCompare';
+import { ReportFullView } from './HealthReport/ReportFullView';
+import type { DisplayMode, ClinicalGroup } from '../types/healthReport';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let ai: InstanceType<typeof GoogleGenAI> | null = null;
+try {
+  ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+} catch {
+  // API key not set — AI features disabled
+}
 
 interface MetricData {
   category: string;
@@ -119,6 +134,98 @@ export const AIReportComparisonReportView: React.FC<AIReportComparisonReportView
   const [modalFilter, setModalFilter] = useState<'all' | 'abnormal'>('all');
   const [modalViewMode, setModalViewMode] = useState<'card' | 'list'>('list');
 
+  // Clinical report state (real data)
+  const reportData = useMemo(() => mapReportData(rawReportData), []);
+  const [selectedGroupId, setSelectedGroupId] = useState('');
+  const [currentCardIdx, setCurrentCardIdx] = useState(0);
+
+  // Exam records (descending by date). Real data first, then mock placeholders.
+  const examRecords: import('../types/healthReport').ExamRecord[] = useMemo(() => {
+    const real: import('../types/healthReport').ExamRecord = {
+      id: reportData.studyId,
+      examTime: reportData.examTime,
+      examDate: reportData.examTime.split(' ')[0],
+      year: reportData.examTime.split('-')[0],
+      packageName: reportData.packageName,
+      reportData,
+    };
+    // Mock placeholder records for demo — no real data
+    const placeholders: import('../types/healthReport').ExamRecord[] = [
+      { id: 'mock-2025-06', examTime: '2025-06-15 09:30:00', examDate: '2025-06-15', year: '2025', packageName: '海-033VIP基础套餐（年中检查）', reportData: null as any },
+      { id: 'mock-2024-12', examTime: '2024-12-10 08:20:00', examDate: '2024-12-10', year: '2024', packageName: '海-033VIP精筛套餐', reportData: null as any },
+      { id: 'mock-2023-11', examTime: '2023-11-28 08:45:00', examDate: '2023-11-28', year: '2023', packageName: '海-033基础套餐', reportData: null as any },
+    ];
+    return [real, ...placeholders];
+  }, [reportData]);
+
+  const [expandedExams, setExpandedExams] = useState<Record<string, Set<string>>>({});
+
+  const toggleExam = (cardId: string, examId: string) => {
+    setExpandedExams(prev => {
+      const cardSet = new Set(prev[cardId] ?? [examRecords[0]?.id]);
+      if (cardSet.has(examId)) cardSet.delete(examId);
+      else cardSet.add(examId);
+      return { ...prev, [cardId]: cardSet };
+    });
+  };
+
+  const isExamExpanded = (cardId: string, examId: string) => {
+    const cardSet = expandedExams[cardId];
+    if (!cardSet) return examId === examRecords[0]?.id; // default: latest expanded
+    return cardSet.has(examId);
+  };
+  const [selectedSubGroupId, setSelectedSubGroupId] = useState<string | null>(null);
+  const [clinicalDisplayMode, setClinicalDisplayMode] = useState<DisplayMode>('all');
+  const [showTrend, setShowTrend] = useState(false);
+  const [reportSearchQuery, setReportSearchQuery] = useState('');
+  const [showImagingCompare, setShowImagingCompare] = useState(false);
+  const [showCardSearch, setShowCardSearch] = useState(false);
+  const [cardViewMode, setCardViewMode] = useState<'stack' | 'full'>('stack');
+  const [selectedExamIds, setSelectedExamIds] = useState<Set<string>>(() => new Set([examRecords[0]?.id].filter(Boolean)));
+
+  const toggleExamSelection = (examId: string) => {
+    setSelectedExamIds(prev => {
+      const next = new Set(prev);
+      if (next.has(examId)) {
+        if (next.size > 1) next.delete(examId); // keep at least 1 selected
+      } else {
+        next.add(examId);
+      }
+      return next;
+    });
+  };
+
+  const selectedExamRecords = useMemo(
+    () => examRecords.filter(e => selectedExamIds.has(e.id)),
+    [examRecords, selectedExamIds]
+  );
+
+  const CARD_CONFIG: { id: string; name: string; icon: React.ElementType; gradient: string; iconBg: string }[] = [
+    { id: 'overview', name: '综合概况', icon: ClipboardList, gradient: 'from-blue-50 to-indigo-50/80 dark:from-slate-800 dark:to-indigo-900/20', iconBg: 'bg-brand/10 text-brand' },
+    { id: 'vitals', name: '基础体征', icon: Activity, gradient: 'from-emerald-50 to-green-50/80 dark:from-slate-800 dark:to-emerald-900/20', iconBg: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' },
+    { id: 'lab', name: '实验室检验', icon: TestTubes, gradient: 'from-violet-50 to-purple-50/80 dark:from-slate-800 dark:to-violet-900/20', iconBg: 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400' },
+    { id: 'imaging', name: '影像检查', icon: ScanLine, gradient: 'from-orange-50 to-amber-50/80 dark:from-slate-800 dark:to-orange-900/20', iconBg: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400' },
+    { id: 'specialty', name: '专科检查', icon: Stethoscope, gradient: 'from-rose-50 to-pink-50/80 dark:from-slate-800 dark:to-rose-900/20', iconBg: 'bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400' },
+    { id: 'health', name: '健康评估', icon: HeartPulse, gradient: 'from-cyan-50 to-sky-50/80 dark:from-slate-800 dark:to-cyan-900/20', iconBg: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400' },
+    { id: 'trend-compare', name: '历年数据对比', icon: TrendingUp, gradient: 'from-slate-50 to-gray-50/80 dark:from-slate-800 dark:to-slate-700/20', iconBg: 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300' },
+  ];
+
+  const handleSelectGroup = (groupId: string, subGroupId?: string | null) => {
+    setSelectedGroupId(groupId);
+    setSelectedSubGroupId(subGroupId ?? null);
+  };
+
+  const activeContent = useMemo(() => {
+    if (selectedGroupId === 'overview') return null;
+    const group = reportData.clinicalGroups.find(g => g.id === selectedGroupId);
+    if (!group) return null;
+    if (selectedSubGroupId) {
+      const sub = group.subGroups.find(s => s.id === selectedSubGroupId);
+      return { group, subGroup: sub || null, items: sub?.items || [] };
+    }
+    return { group, subGroup: null, items: group.subGroups.flatMap(s => s.items) };
+  }, [selectedGroupId, selectedSubGroupId, reportData]);
+
   const metrics: MetricData[] = [
     { category: '糖尿病检查', name: '空腹血糖', unit: 'mmol/L', refRange: '3.9 - 6.1', values: { '2018': 4.5, '2019': 4.6, '2020': 4.8, '2021': 4.9, '2022': 5.0, '2023': 5.1, '2024': 5.2, '2025': 5.8, '2026': 6.4 }, judgment: 'high', trend: '连续升高，2026已超上限' },
     { category: '血脂检查', name: '总胆固醇', unit: 'mmol/L', refRange: '3.1 - 5.2', values: { '2018': 4.0, '2019': 4.1, '2020': 4.2, '2021': 4.3, '2022': 4.5, '2023': 4.6, '2024': 4.8, '2025': 5.4, '2026': 5.9 }, judgment: 'high', trend: '三年递增，建议结合 LDL-C 复查' },
@@ -133,6 +240,35 @@ export const AIReportComparisonReportView: React.FC<AIReportComparisonReportView
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if user is typing in an input
+      if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return;
+
+      if (e.key === 'ArrowLeft' && !selectedGroupId) {
+        cardSwapRef.current?.swapBack();
+        setCurrentCardIdx(prev => prev <= 0 ? CARD_CONFIG.length - 1 : prev - 1);
+      } else if (e.key === 'ArrowRight' && !selectedGroupId) {
+        cardSwapRef.current?.swap();
+        setCurrentCardIdx(prev => prev >= CARD_CONFIG.length - 1 ? 0 : prev + 1);
+      } else if (e.key === 'Enter' && !selectedGroupId) {
+        const cfg = CARD_CONFIG[currentCardIdx];
+        if (cfg) {
+          setSelectedGroupId(cfg.id);
+          setSelectedSubGroupId(null);
+          setReportSearchQuery('');
+          setClinicalDisplayMode('all');
+        }
+      } else if (e.key === 'Escape' && selectedGroupId) {
+        setSelectedGroupId('');
+        setSelectedSubGroupId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedGroupId, currentCardIdx, CARD_CONFIG.length]);
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -447,19 +583,22 @@ export const AIReportComparisonReportView: React.FC<AIReportComparisonReportView
                   <span className="text-sm font-bold uppercase tracking-wider">健康数据概览</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="group text-center px-3 py-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 hover:border-rose-200 dark:hover:border-rose-900/50 transition-all shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-[0_8px_20px_rgb(244,63,94,0.08)]">
+                  <div
+                    onClick={() => { setSelectedGroupId('overview'); setSelectedSubGroupId(null); setCurrentCardIdx(0); }}
+                    className="group text-center px-3 py-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 hover:border-rose-200 dark:hover:border-rose-900/50 transition-all shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-[0_8px_20px_rgb(244,63,94,0.08)] cursor-pointer"
+                  >
                     <div className="flex items-center justify-center space-x-1 mb-1">
                       <div className="w-1.5 h-1.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]"></div>
                       <span className="text-[9px] text-slate-400 uppercase font-bold tracking-widest">异常指标</span>
                     </div>
-                    <div className="text-2xl font-black text-slate-900 dark:text-white group-hover:scale-110 transition-transform">6</div>
+                    <div className="text-2xl font-black text-slate-900 dark:text-white group-hover:scale-110 transition-transform">{reportData.totalAbnormal}</div>
                   </div>
                   <div className="group text-center px-3 py-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 hover:border-amber-200 dark:hover:border-amber-900/50 transition-all shadow-[0_2px_10px_rgb(0,0,0,0.02)] hover:shadow-[0_8px_20px_rgb(245,158,11,0.08)]">
                     <div className="flex items-center justify-center space-x-1 mb-1">
                       <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]"></div>
-                      <span className="text-[9px] text-slate-400 uppercase font-bold tracking-widest">持续上升</span>
+                      <span className="text-[9px] text-slate-400 uppercase font-bold tracking-widest">检查项目</span>
                     </div>
-                    <div className="text-2xl font-black text-slate-900 dark:text-white group-hover:scale-110 transition-transform">5</div>
+                    <div className="text-2xl font-black text-slate-900 dark:text-white group-hover:scale-110 transition-transform">{reportData.totalItems}</div>
                   </div>
                 </div>
               </div>
@@ -530,16 +669,189 @@ export const AIReportComparisonReportView: React.FC<AIReportComparisonReportView
           </div>
         </div>
 
-        {/* Right Column: Card Swap Archives */}
+        {/* Right Column: Clinical Group Cards + Detail View */}
         <div className="w-full lg:w-2/3 flex flex-col bg-transparent min-h-[500px] overflow-hidden relative">
           <AnimatePresence mode="wait">
-            {focusedMetricName ? (
+            {/* Expanded Detail View — shown when a clinical group card is clicked */}
+            {selectedGroupId ? (
+              <motion.div
+                key={`detail-${selectedGroupId}-${selectedSubGroupId}`}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="absolute inset-0 bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-xl flex flex-col z-20 overflow-hidden"
+              >
+                {/* Detail Header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={() => { setSelectedGroupId(''); setSelectedSubGroupId(null); }}
+                      className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </button>
+                    <div>
+                      <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                        {selectedGroupId === 'overview' ? '综合概况' :
+                         selectedGroupId === 'trend-compare' ? '历年数据对比' :
+                         (() => {
+                           const g = reportData.clinicalGroups.find(g => g.id === selectedGroupId);
+                           return selectedSubGroupId
+                             ? `${g?.name} — ${g?.subGroups.find(s => s.id === selectedSubGroupId)?.name}`
+                             : g?.name || '';
+                         })()}
+                      </h3>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedGroupId !== 'overview' && selectedGroupId !== 'trend-compare' && (
+                      <>
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                          <input
+                            type="text"
+                            value={reportSearchQuery}
+                            onChange={e => setReportSearchQuery(e.target.value)}
+                            placeholder="搜索..."
+                            className="pl-8 pr-3 py-1.5 w-36 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                          />
+                        </div>
+                        <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg">
+                          <button
+                            onClick={() => setClinicalDisplayMode('all')}
+                            className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${clinicalDisplayMode === 'all' ? 'bg-white dark:bg-slate-700 text-brand shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
+                          >全部</button>
+                          <button
+                            onClick={() => setClinicalDisplayMode('abnormal')}
+                            className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${clinicalDisplayMode === 'abnormal' ? 'bg-white dark:bg-slate-700 text-red-500 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
+                          >异常</button>
+                        </div>
+                      </>
+                    )}
+                    <button
+                      onClick={() => { setSelectedGroupId(''); setSelectedSubGroupId(null); }}
+                      className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors text-slate-500"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Group Switch Tabs */}
+                <div className="flex items-center gap-1 px-5 py-2.5 border-b border-slate-100 dark:border-slate-800 shrink-0 overflow-x-auto hide-scrollbar">
+                  {CARD_CONFIG.map((cfg, idx) => {
+                    const isActive = selectedGroupId === cfg.id;
+                    const Icon = cfg.icon;
+                    return (
+                      <button
+                        key={cfg.id}
+                        onClick={() => { setSelectedGroupId(cfg.id); setSelectedSubGroupId(null); setReportSearchQuery(''); setCurrentCardIdx(idx); }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-150 shrink-0 ${
+                          isActive
+                            ? 'bg-brand text-white shadow-sm'
+                            : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300'
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        {cfg.name}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Detail Content */}
+                <div className="flex-1 overflow-hidden flex">
+                  {/* Sub-group navigation for lab/imaging */}
+                  {activeContent && (activeContent.group.id === 'lab' || activeContent.group.id === 'imaging') && activeContent.group.subGroups.length > 1 && (
+                    <div className="w-44 shrink-0 border-r border-slate-100 dark:border-slate-800 overflow-y-auto custom-scrollbar py-3 px-2">
+                      <button
+                        onClick={() => setSelectedSubGroupId(null)}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs mb-0.5 transition-all ${!selectedSubGroupId ? 'bg-brand/10 text-brand font-bold' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                      >全部</button>
+                      {activeContent.group.subGroups.map(sub => (
+                        <button
+                          key={sub.id}
+                          onClick={() => setSelectedSubGroupId(sub.id)}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] mb-0.5 transition-all truncate ${selectedSubGroupId === sub.id ? 'bg-brand/10 text-brand font-bold' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                        >
+                          {sub.name}
+                          {sub.abnormalCount > 0 && <span className="ml-1 text-red-500 text-[10px]">{sub.abnormalCount}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4">
+                    {selectedGroupId === 'overview' ? (
+                      <ReportOverview data={reportData} />
+                    ) : selectedGroupId === 'trend-compare' ? (
+                      /* Trend comparison: reuse existing metrics + TrendChart */
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {metrics.map(m => (
+                            <div key={m.name} className="bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFocusedMetricName(m.name)}>
+                              <div className="flex justify-between items-start mb-3">
+                                <div>
+                                  <h5 className="font-bold text-slate-900 dark:text-white">{m.name}</h5>
+                                  <p className="text-[10px] text-slate-400">{m.refRange} {m.unit}</p>
+                                </div>
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${m.judgment === 'high' ? 'bg-rose-50 text-rose-500 dark:bg-rose-500/10' : m.judgment === 'low' ? 'bg-amber-50 text-amber-500 dark:bg-amber-500/10' : 'bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10'}`}>
+                                  {m.judgment === 'high' ? '偏高' : m.judgment === 'low' ? '偏低' : '正常'}
+                                </span>
+                              </div>
+                              <TrendChart m={m} />
+                              <p className="text-[10px] text-slate-500 mt-2">{m.trend}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : activeContent ? (
+                      <>
+                        {activeContent.group.type === 'imaging' ? (
+                          <div className="space-y-4">
+                            {/* Imaging Compare Toggle */}
+                            {examRecords.filter(e => !!e.reportData).length >= 2 && (
+                              <div className="flex justify-end">
+                                <button
+                                  onClick={() => setShowImagingCompare(!showImagingCompare)}
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                    showImagingCompare ? 'bg-brand text-white shadow-sm' : 'bg-brand/10 text-brand hover:bg-brand/20'
+                                  }`}
+                                >
+                                  <BarChart3 className="w-3.5 h-3.5" />
+                                  {showImagingCompare ? '返回列表' : '影像对比'}
+                                </button>
+                              </div>
+                            )}
+                            {showImagingCompare ? (
+                              <ImagingCompare
+                                currentSections={reportData.imagingSections}
+                                previousSections={reportData.imagingSections}
+                                currentLabel={examRecords[0]?.examDate || ''}
+                                previousLabel={examRecords[1]?.examDate || ''}
+                                onClose={() => setShowImagingCompare(false)}
+                              />
+                            ) : (
+                              <ReportImagingCards sections={reportData.imagingSections} displayMode={clinicalDisplayMode} searchQuery={reportSearchQuery} />
+                            )}
+                          </div>
+                        ) : activeContent.group.type === 'text' ? (
+                          <ReportTextSection items={activeContent.items} displayMode={clinicalDisplayMode} searchQuery={reportSearchQuery} title={activeContent.subGroup ? `${activeContent.group.name} - ${activeContent.subGroup.name}` : activeContent.group.name} />
+                        ) : (
+                          <ReportDataTable items={activeContent.items} displayMode={clinicalDisplayMode} searchQuery={reportSearchQuery} title={activeContent.subGroup ? `${activeContent.group.name} - ${activeContent.subGroup.name}` : activeContent.group.name} />
+                        )}
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              </motion.div>
+            ) : focusedMetricName ? (
               <motion.div
                 key="focused-view"
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="absolute inset-0 bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-xl p-8 flex flex-col z-20 overflow-hidden"
+                className="absolute inset-0 top-10 bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-xl p-8 flex flex-col z-20 overflow-hidden"
               >
                 {(() => {
                   const m = metrics.find(m => m.name === focusedMetricName);
@@ -627,141 +939,389 @@ export const AIReportComparisonReportView: React.FC<AIReportComparisonReportView
                   );
                 })()}
               </motion.div>
-            ) : (
-              <motion.div 
-                key="card-swap"
+            ) : cardViewMode === 'full' ? (
+              <motion.div
+                key="full-view"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="absolute inset-0 flex items-center justify-center perspective-1000 translate-x-0 translate-y-24 scale-[0.85]"
+                className="absolute inset-0 flex flex-col overflow-hidden"
               >
-                <CardSwap
-                  ref={cardSwapRef}
-                  width="100%"
-                  height="100%"
-                  pauseOnHover={true}
-                  cardDistance={100}
-                  verticalDistance={75}
-                  delay={800}
-                  skewAmount={5}
-                  easing="linear"
-                  onCardClick={handleSwapCard}
-                >
-              {cardStack.map((year, index) => {
-                return (
-                  <Card
-                    key={year}
-                    className="bg-gradient-to-b from-white to-slate-50/80 dark:from-slate-800 dark:to-slate-900 rounded-[32px] border-[1.5px] border-t-white border-x-white/80 border-b-white/20 dark:border-t-slate-600 dark:border-x-slate-600/50 dark:border-b-transparent shadow-[0_20px_40px_rgb(0,0,0,0.06)] p-6 flex flex-col transition-colors duration-300 cursor-pointer w-full h-full backdrop-blur-sm"
-                    onClick={(e: any) => {
-                      e.stopPropagation();
-                      handleOpenModal(year);
-                    }}
-                  >
-                    <div className="flex flex-col items-center justify-center mb-6 shrink-0 relative">
-                      <div className="absolute right-0 top-0 flex space-x-1 bg-slate-100 dark:bg-slate-700/50 p-1 rounded-xl">
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setViewMode('list'); }}
-                          className={`p-1.5 rounded-lg transition-colors flex items-center justify-center ${viewMode === 'list' ? 'bg-white dark:bg-slate-800 text-brand shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
-                          title="列表查看"
+                {/* Full View Toolbar */}
+                <div className="shrink-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 rounded-t-2xl px-4 py-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      {/* View Mode Toggle */}
+                      <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg">
+                        <button
+                          onClick={() => setCardViewMode('stack')}
+                          className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                          title="卡片模式"
                         >
-                          <List className="w-4 h-4" />
+                          <Layers className="w-3.5 h-3.5" />
                         </button>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setViewMode('trend'); }}
-                          className={`p-1.5 rounded-lg transition-colors flex items-center justify-center ${viewMode === 'trend' ? 'bg-white dark:bg-slate-800 text-brand shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
-                          title="表单查看"
+                        <button
+                          className="p-1.5 rounded-md bg-brand text-white shadow-sm"
+                          title="全览模式"
                         >
-                          <LayoutGrid className="w-4 h-4" />
+                          <List className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      <h4 className="text-2xl font-bold text-slate-900 dark:text-white text-center">{year}年度体检报告</h4>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 text-center mt-2">体检时间：{year}年03月18日</p>
+                      <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1" />
+                      {/* Exam Record Pills */}
+                      <div className="flex items-center gap-1 overflow-x-auto hide-scrollbar">
+                        {examRecords.map((exam, i) => {
+                          const isSelected = selectedExamIds.has(exam.id);
+                          const hasData = !!exam.reportData;
+                          return (
+                            <button
+                              key={exam.id}
+                              onClick={() => toggleExamSelection(exam.id)}
+                              disabled={!hasData}
+                              className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition-all duration-150 shrink-0 ${
+                                isSelected
+                                  ? 'bg-brand text-white shadow-sm'
+                                  : hasData
+                                    ? 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                    : 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                              }`}
+                              title={exam.packageName}
+                            >
+                              {exam.examDate}
+                              {i === 0 && <span className="text-[9px] opacity-70">最新</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {/* Display Mode */}
+                      <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg">
+                        <button
+                          onClick={() => setClinicalDisplayMode('all')}
+                          className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all duration-150 ${clinicalDisplayMode === 'all' ? 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 shadow-sm' : 'text-slate-400 dark:text-slate-500'}`}
+                        >全部</button>
+                        <button
+                          onClick={() => setClinicalDisplayMode('abnormal')}
+                          className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all duration-150 ${clinicalDisplayMode === 'abnormal' ? 'bg-white dark:bg-slate-700 text-red-500 shadow-sm' : 'text-slate-400 dark:text-slate-500'}`}
+                        >异常</button>
+                      </div>
+                      {/* Search */}
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                        <input
+                          type="text"
+                          value={reportSearchQuery}
+                          onChange={e => setReportSearchQuery(e.target.value)}
+                          placeholder="搜索指标..."
+                          className="pl-8 pr-3 py-1.5 w-44 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {/* Full View Content */}
+                <div className="flex-1 overflow-hidden bg-white dark:bg-slate-900 rounded-b-2xl border border-t-0 border-slate-200 dark:border-slate-700">
+                  <ReportFullView
+                    examRecords={selectedExamRecords}
+                    displayMode={clinicalDisplayMode}
+                    searchQuery={reportSearchQuery}
+                  />
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="card-swap-clinical"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 flex flex-col overflow-hidden"
+              >
+                {/* Unified Toolbar — nav arrows + tabs + search, solid background */}
+                <div className="shrink-0 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 rounded-t-2xl px-3 py-2.5 space-y-2">
+                  {/* Tab Row: view toggle + arrows + group tabs + counter */}
+                  <div className="flex items-center gap-1.5">
+                    {/* View Mode Toggle */}
+                    <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg shrink-0 mr-1">
+                      <button
+                        className="p-1.5 rounded-md bg-brand text-white shadow-sm"
+                        title="卡片模式"
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setCardViewMode('full')}
+                        className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                        title="全览模式"
+                      >
+                        <List className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => { cardSwapRef.current?.swapBack(); setCurrentCardIdx(prev => prev <= 0 ? CARD_CONFIG.length - 1 : prev - 1); }}
+                      className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors duration-150 shrink-0"
+                      title="上一张"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+
+                    <div className="flex-1 flex items-center gap-1 overflow-x-auto hide-scrollbar">
+                      {CARD_CONFIG.map((cfg, idx) => {
+                        const group = reportData.clinicalGroups.find(g => g.id === cfg.id);
+                        const hasAbnormal = (group?.abnormalCount ?? 0) > 0 || (cfg.id === 'overview' && reportData.totalAbnormal > 0) || (cfg.id === 'trend-compare' && metrics.some(m => m.judgment !== 'normal'));
+                        const Icon = cfg.icon;
+                        const isActive = idx === currentCardIdx;
+                        return (
+                          <button
+                            key={cfg.id}
+                            onClick={() => {
+                              setSelectedGroupId(cfg.id);
+                              setSelectedSubGroupId(null);
+                              setReportSearchQuery('');
+                              setClinicalDisplayMode('all');
+                              setCurrentCardIdx(idx);
+                            }}
+                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-150 shrink-0 ${
+                              isActive
+                                ? 'bg-brand text-white shadow-sm'
+                                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200'
+                            }`}
+                          >
+                            <Icon className="w-3.5 h-3.5" />
+                            <span className="hidden lg:inline">{cfg.name}</span>
+                            {hasAbnormal && !isActive && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
 
-                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar flex flex-col">
-                      {viewMode === 'trend' ? (
-                        // Trend Form View
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4">
-                          {metrics.map(m => (
-                            <div key={m.name} className="bg-slate-50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-700/50 rounded-2xl p-4 flex flex-col">
-                              <div className="flex justify-between items-start mb-4">
-                                <div>
-                                  <h5 className="font-bold text-slate-900 dark:text-white text-lg">{m.name}</h5>
-                                  <p className="text-xs text-slate-500 dark:text-slate-400">参考范围 {m.refRange} {m.unit}</p>
-                                </div>
-                                <span className={`px-2 py-1 rounded text-[10px] font-bold ${m.judgment === 'high' ? 'bg-rose-50 text-rose-500 dark:bg-rose-500/10 dark:text-rose-400' : m.judgment === 'low' ? 'bg-amber-50 text-amber-500 dark:bg-amber-500/10 dark:text-amber-400' : 'bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10 dark:text-emerald-400'}`}>
-                                  当前{m.judgment === 'high' ? '偏高' : m.judgment === 'low' ? '偏低' : '正常'}
-                                </span>
-                              </div>
-                              
-                              <div className="grid grid-cols-3 gap-2 mb-2">
-                                <div className="bg-white dark:bg-slate-800 rounded-xl p-2 text-center border border-slate-100 dark:border-slate-700">
-                                  <div className="text-[10px] text-slate-400 mb-1">2024</div>
-                                  <div className="font-bold text-slate-900 dark:text-white text-lg">{m.values['2024']}</div>
-                                </div>
-                                <div className="bg-white dark:bg-slate-800 rounded-xl p-2 text-center border border-slate-100 dark:border-slate-700">
-                                  <div className="text-[10px] text-slate-400 mb-1">2025</div>
-                                  <div className="font-bold text-slate-900 dark:text-white text-lg">{m.values['2025']}</div>
-                                </div>
-                                <div className={`rounded-xl p-2 text-center border ${m.judgment !== 'normal' ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800/50' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'}`}>
-                                  <div className="text-[10px] text-blue-500 dark:text-blue-400 mb-1">2026</div>
-                                  <div className="font-bold text-blue-600 dark:text-blue-400 text-lg">{m.values['2026']}</div>
-                                </div>
-                              </div>
+                    <button
+                      onClick={() => { cardSwapRef.current?.swap(); setCurrentCardIdx(prev => prev >= CARD_CONFIG.length - 1 ? 0 : prev + 1); }}
+                      className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors duration-150 shrink-0"
+                      title="下一张"
+                    >
+                      <ChevronLeft className="w-4 h-4 rotate-180" />
+                    </button>
 
-                              <TrendChart m={m} />
+                    <button
+                      onClick={() => { setShowCardSearch(p => !p); if (showCardSearch) setReportSearchQuery(''); }}
+                      className={`p-1.5 rounded-lg transition-colors duration-150 shrink-0 ml-1 ${
+                        showCardSearch ? 'bg-brand/10 text-brand' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300'
+                      }`}
+                      title="搜索"
+                    >
+                      <Search className="w-3.5 h-3.5" />
+                    </button>
 
-                              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-2">
-                                趋势结论：{m.trend}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        // Full Table View
-                        <table className="w-full text-base text-center">
-                          <thead>
-                            <tr className="text-slate-400 text-xs uppercase font-bold border-b border-slate-100 dark:border-slate-700">
-                              <th className="py-3 px-1 text-center">指标</th>
-                              <th className="py-3 px-1 text-center">单位</th>
-                              <th className="py-3 px-1 text-center">参考范围</th>
-                              <th className="py-3 px-1 text-center">数值</th>
-                              <th className="py-3 px-1 text-center">判断</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
-                            {metrics.map((m, i) => {
-                              const val = m.values[year];
-                              // Simple judgment logic for demo
-                              const isHigh = typeof val === 'number' && val > parseFloat(m.refRange.split('-')[1]);
-                              const isLow = typeof val === 'number' && val < parseFloat(m.refRange.split('-')[0]);
-                              
-                              return (
-                                <tr key={i} className="group hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors cursor-pointer" onClick={() => setFocusedMetricName(m.name)}>
-                                  <td className="py-3 px-1 font-bold text-slate-800 dark:text-slate-200">{m.name}</td>
-                                  <td className="py-3 px-1 text-slate-500 dark:text-slate-400">{m.unit}</td>
-                                  <td className="py-3 px-1 text-slate-500 dark:text-slate-400">{m.refRange}</td>
-                                  <td className="py-3 px-1 font-bold text-slate-900 dark:text-white text-lg">{val}</td>
-                                  <td className="py-3 px-1">
-                                    <span className={`px-3 py-1 rounded text-xs font-bold ${
-                                      isHigh ? 'bg-rose-50 dark:bg-rose-500/10 text-rose-500' :
-                                      isLow ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-500' :
-                                      'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500'
-                                    }`}>
-                                      {isHigh ? '偏高' : isLow ? '偏低' : '正常'}
-                                    </span>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+                    <span className="text-xs text-slate-400 dark:text-slate-500 font-semibold tabular-nums shrink-0">
+                      {currentCardIdx + 1}/{CARD_CONFIG.length}
+                    </span>
+                  </div>
+
+                  {/* Search Row — toggled by search button */}
+                  {showCardSearch && (
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        autoFocus
+                        value={reportSearchQuery}
+                        onChange={e => setReportSearchQuery(e.target.value)}
+                        placeholder="搜索检查项目..."
+                        className="w-full pl-8 pr-8 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                      />
+                      {reportSearchQuery && (
+                        <button
+                          onClick={() => setReportSearchQuery('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
                       )}
                     </div>
-                  </Card>
-                );
-              })}
-            </CardSwap>
+                  )}
+                </div>
+
+                {/* Card Stack */}
+                <div className="flex-1 relative flex items-center justify-center perspective-1000 translate-y-10 scale-[0.92]">
+                  <CardSwap
+                    ref={cardSwapRef}
+                    width="100%"
+                    height="100%"
+                    pauseOnHover={false}
+                    cardDistance={80}
+                    verticalDistance={60}
+                    delay={0}
+                    skewAmount={4}
+                    easing="linear"
+                  >
+                {CARD_CONFIG.map((cfg) => {
+                  const group = reportData.clinicalGroups.find(g => g.id === cfg.id);
+                  const abnormalCount = group?.abnormalCount ?? (cfg.id === 'overview' ? reportData.totalAbnormal : cfg.id === 'trend-compare' ? metrics.filter(m => m.judgment !== 'normal').length : 0);
+                  const totalCount = group?.totalCount ?? (cfg.id === 'overview' ? reportData.totalItems : cfg.id === 'trend-compare' ? metrics.length : 0);
+                  const Icon = cfg.icon;
+
+                  // Accent color per card (top border stripe)
+                  const accentMap: Record<string, string> = {
+                    overview: 'border-t-brand', vitals: 'border-t-emerald-500', lab: 'border-t-violet-500',
+                    imaging: 'border-t-orange-500', specialty: 'border-t-rose-500', health: 'border-t-cyan-500',
+                    'trend-compare': 'border-t-slate-500',
+                  };
+                  const accent = accentMap[cfg.id] || 'border-t-brand';
+
+                  return (
+                    <Card
+                      key={cfg.id}
+                      className={`bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-2xl border border-slate-200 dark:border-slate-700 ${accent} border-t-[3px] shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.3)] p-5 flex flex-col cursor-pointer w-full h-full transition-shadow duration-200 hover:shadow-[0_12px_40px_rgb(0,0,0,0.12)]`}
+                      onClick={(e: any) => {
+                        e.stopPropagation();
+                        setSelectedGroupId(cfg.id);
+                        setSelectedSubGroupId(null);
+                        setReportSearchQuery('');
+                        setClinicalDisplayMode('all');
+                      }}
+                    >
+                      {/* Card Header */}
+                      <div className="flex items-start justify-between mb-4 shrink-0">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${cfg.iconBg}`}>
+                            <Icon className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h4 className="text-base font-bold text-slate-900 dark:text-white">{cfg.name}</h4>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-xs text-slate-400 dark:text-slate-500 tabular-nums">
+                                {examRecords[examRecords.length - 1]?.year}–{examRecords[0]?.year}
+                              </span>
+                              <span className="text-slate-300 dark:text-slate-600">·</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">{totalCount} 项</span>
+                            </div>
+                          </div>
+                        </div>
+                        {abnormalCount > 0 && (
+                          <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400 tabular-nums">
+                            {abnormalCount}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Card Content — Exam Record Accordion */}
+                      <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-1.5">
+                        {(() => {
+                          let lastYear = '';
+                          return examRecords.map((exam) => {
+                            const isExpanded = isExamExpanded(cfg.id, exam.id);
+                            const hasData = !!exam.reportData;
+                            const examGroup = hasData ? exam.reportData.clinicalGroups.find(g => g.id === cfg.id) : null;
+                            const examAbnormal = examGroup?.abnormalCount ?? (cfg.id === 'overview' && hasData ? exam.reportData.totalAbnormal : cfg.id === 'trend-compare' ? metrics.filter(m => m.judgment !== 'normal').length : 0);
+                            const showYearDivider = exam.year !== lastYear;
+                            lastYear = exam.year;
+
+                            const examTopItems = !hasData ? [] :
+                              cfg.id === 'overview'
+                                ? exam.reportData.conclusions.slice(0, 6).map(c => c.text)
+                                : cfg.id === 'trend-compare'
+                                ? metrics.map(m => `${m.name}: ${m.values['2026']} ${m.unit}`)
+                                : examGroup?.subGroups.slice(0, 8).map(s => `${s.name}${s.abnormalCount > 0 ? ` (${s.abnormalCount}异常)` : ''}`) ?? [];
+
+                            return (
+                              <div key={exam.id}>
+                                {showYearDivider && (
+                                  <div className="flex items-center gap-2 px-1 pt-2 pb-1">
+                                    <span className="text-xs font-bold text-slate-300 dark:text-slate-600 tabular-nums">{exam.year}</span>
+                                    <div className="flex-1 h-px bg-slate-100 dark:bg-slate-800" />
+                                  </div>
+                                )}
+                                <div className={`rounded-lg overflow-hidden transition-all duration-150 ${
+                                  isExpanded && hasData
+                                    ? 'bg-slate-50 dark:bg-slate-800/60 ring-1 ring-slate-200 dark:ring-slate-700'
+                                    : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/30'
+                                }`}>
+                                  {/* Exam Header */}
+                                  <div className="flex items-center justify-between px-3 py-2">
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); toggleExam(cfg.id, exam.id); }}
+                                      className="flex items-center gap-2 flex-1 min-w-0"
+                                    >
+                                      <div className={`w-1 h-4 rounded-full shrink-0 ${hasData ? (isExpanded ? 'bg-brand' : 'bg-slate-300 dark:bg-slate-600') : 'bg-slate-200 dark:bg-slate-700'}`} />
+                                      <span className={`text-sm font-semibold tabular-nums ${hasData ? (isExpanded ? 'text-slate-900 dark:text-white' : 'text-slate-700 dark:text-slate-300') : 'text-slate-400 dark:text-slate-600'}`}>
+                                        {exam.examDate}
+                                      </span>
+                                      {hasData && examAbnormal > 0 && (
+                                        <span className="w-5 h-5 rounded-full text-xs font-bold bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-400 flex items-center justify-center shrink-0 tabular-nums">
+                                          {examAbnormal}
+                                        </span>
+                                      )}
+                                      {!hasData && (
+                                        <span className="text-xs text-slate-400 dark:text-slate-600">—</span>
+                                      )}
+                                      <ChevronDown className={`w-3.5 h-3.5 ml-auto transition-transform duration-200 shrink-0 ${isExpanded ? 'rotate-180 text-slate-600 dark:text-slate-300' : 'text-slate-300 dark:text-slate-600'}`} />
+                                    </button>
+                                    {isExpanded && hasData && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setSelectedYearForModal(exam.year); }}
+                                        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold text-brand hover:bg-brand/10 transition-colors duration-150 shrink-0 ml-1"
+                                        title={`${exam.examDate} 历年对比`}
+                                      >
+                                        <BarChart3 className="w-3 h-3" />
+                                        对比
+                                      </button>
+                                    )}
+                                  </div>
+                                  {/* Exam Content */}
+                                  {isExpanded && (
+                                    <div className="px-3 pb-2.5 space-y-1">
+                                      {hasData ? (
+                                        examTopItems.map((item, idx) => {
+                                          const matchedMetric = metrics.find(m => item.includes(m.name));
+                                          const isAbnItem = item.includes('异常') || item.includes('偏高') || item.includes('↑');
+                                          const isLowItem = item.includes('偏低') || item.includes('↓');
+                                          return (
+                                            <div
+                                              key={idx}
+                                              onClick={(e) => { if (matchedMetric) { e.stopPropagation(); setFocusedMetricName(matchedMetric.name); } }}
+                                              className={`flex items-center gap-2.5 px-2.5 py-2 rounded-md transition-all duration-150 ${
+                                                matchedMetric
+                                                  ? 'cursor-pointer hover:bg-white dark:hover:bg-slate-700 hover:shadow-sm group'
+                                                  : ''
+                                              } ${isAbnItem ? 'bg-red-50/60 dark:bg-red-950/20' : isLowItem ? 'bg-blue-50/60 dark:bg-blue-950/20' : 'bg-white/60 dark:bg-slate-800/30'}`}
+                                            >
+                                              <div className={`w-0.5 h-3.5 rounded-full shrink-0 ${isAbnItem ? 'bg-red-400' : isLowItem ? 'bg-blue-400' : 'bg-emerald-400'}`} />
+                                              <span className={`text-xs truncate flex-1 ${isAbnItem ? 'text-red-700 dark:text-red-300 font-medium' : isLowItem ? 'text-blue-700 dark:text-blue-300 font-medium' : 'text-slate-600 dark:text-slate-400'}`}>{item}</span>
+                                              {matchedMetric && (
+                                                <Sparkles className="w-3 h-3 text-slate-300 group-hover:text-brand transition-colors shrink-0" />
+                                              )}
+                                            </div>
+                                          );
+                                        })
+                                      ) : (
+                                        <div className="text-center py-3 text-xs text-slate-400 dark:text-slate-600">
+                                          暂未录入数据
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+
+                      {/* Card Footer */}
+                      <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 shrink-0 flex items-center justify-between">
+                        <span className="text-xs text-slate-400 dark:text-slate-500">点击展开完整报告</span>
+                        <span className="text-xs font-semibold text-brand">
+                          查看详情 →
+                        </span>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </CardSwap>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

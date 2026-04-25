@@ -18,6 +18,7 @@ import { AIReportComparisonDetailView } from './components/AIReportInterpretatio
 import { AIFourQuadrantView } from './components/AIFourQuadrantView';
 import { AIComponentManagementView } from './components/AIComponentManagementView';
 import { AIRealtimeRecordingView } from './components/AIRealtimeRecordingView';
+import { HealthReportView } from './components/HealthReport/HealthReportView';
 import { LoginPage } from './LoginPage';
 import { NOTICES } from './data/mockData';
 import { LayoutDashboard } from 'lucide-react';
@@ -27,7 +28,7 @@ export default function App() {
   const [isSidebarDarkMode, setIsSidebarDarkMode] = useState(true);
   const [isContentDarkMode, setIsContentDarkMode] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [currentPage, setCurrentPage] = useState<'dashboard' | 'health-butler' | 'function-square' | 'ai-diagnosis' | 'medical-ai' | 'nurse-ai' | 'consultant-ai' | 'ai-report-comparison-detail' | 'ai-four-quadrant' | 'ai-component-management' | 'ai-realtime-recording'>('dashboard');
+  const [currentPage, setCurrentPage] = useState<'dashboard' | 'health-butler' | 'function-square' | 'ai-diagnosis' | 'medical-ai' | 'nurse-ai' | 'consultant-ai' | 'ai-report-comparison-detail' | 'ai-four-quadrant' | 'ai-component-management' | 'ai-realtime-recording' | 'health-report'>('dashboard');
   const [navigationParams, setNavigationParams] = useState<any>(null);
   const [isAIOpen, setIsAIOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'work' | 'todo' | 'risk'>('work');
@@ -157,6 +158,8 @@ export default function App() {
               <AIComponentManagementView setCurrentPage={setCurrentPage} isDarkMode={isContentDarkMode} setIsDarkMode={setIsContentDarkMode} />
             ) : currentPage === 'ai-realtime-recording' ? (
               <AIRealtimeRecordingView setCurrentPage={setCurrentPage} isDarkMode={isContentDarkMode} setIsDarkMode={setIsContentDarkMode} />
+            ) : currentPage === 'health-report' ? (
+              <HealthReportView setCurrentPage={setCurrentPage} isDarkMode={isContentDarkMode} setIsDarkMode={setIsContentDarkMode} />
             ) : (
               <ConsultantAIWorkbench setCurrentPage={setCurrentPage} setNavigationParams={setNavigationParams} />
             )}
